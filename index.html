@@ -84,7 +84,10 @@
 
     <!-- CONTROLS -->
     <div class="actions">
-      <input type="text" id="searchInput" placeholder="Search by client, reg, nixer, status..." />
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Search by client, reg, nixer, status..." />
 
       <div class="sort-controls">
         <span class="sort-label">Sort by:</span>
@@ -93,13 +96,23 @@
           <option value="client">Client name</option>
           <option value="price">Total price</option>
         </select>
-        <button type="button" id="sortDirBtn" class="btn btn-small btn-outline" title="Toggle sort direction">
+        <button
+          type="button"
+          id="sortDirBtn"
+          class="btn btn-small btn-outline"
+          title="Toggle sort direction">
           ↓ Newest / Highest
         </button>
       </div>
 
       <div class="right-actions">
+        <!-- Install App button (hidden until installable) -->
+        <button id="installBtn" class="btn btn-primary" type="button" style="display:none;">
+          Install App
+        </button>
+
         <button id="themeToggle" type="button" class="btn btn-outline">Dark mode</button>
+        <button id="downloadBtn" class="btn btn-outline" type="button">Download CSV</button>
         <button id="clearAllBtn" class="btn btn-danger" type="button">Clear ALL records</button>
       </div>
     </div>
@@ -159,6 +172,8 @@
     const sortBySelect = document.getElementById("sortBy");
     const sortDirBtn = document.getElementById("sortDirBtn");
     const themeToggleBtn = document.getElementById("themeToggle");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const installBtn = document.getElementById("installBtn");
 
     // Dashboard elements
     const totalJobsEl = document.getElementById("totalJobs");
@@ -167,10 +182,12 @@
     const pendingJobsEl = document.getElementById("pendingJobs");
 
     let records = [];
-    let editIndex = null;
-    let sortBy = "date";
-    let sortDir = "desc";
+    let editIndex = null; // if not null, we're editing that record
+    let sortBy = "date";  // "date" | "client" | "price"
+    let sortDir = "desc"; // "asc" | "desc"
+    let deferredPrompt = null; // for PWA install
 
+    // -------- STORAGE --------
     function loadRecords() {
       const saved = localStorage.getItem(STORAGE_KEY);
       records = saved ? JSON.parse(saved) : [];
@@ -204,6 +221,7 @@
         return x - y;
       }
 
+      // default: date
       const x = a.date ? new Date(a.date).getTime() : 0;
       const y = b.date ? new Date(b.date).getTime() : 0;
       return x - y;
@@ -253,12 +271,14 @@
       const now = new Date();
       let data = records.map((record, index) => ({ ...record, index }));
 
+      // Sort data
       data.sort((a, b) => {
         let result = compareValues(a, b, sortBy);
         if (sortDir === "desc") result = -result;
         return result;
       });
 
+      // Filter + render
       data
         .filter((r) => {
           if (!filter) return true;
@@ -277,6 +297,7 @@
           const partsNum = parseFloat(r.partsPrice) || 0;
           const profitNum = totalNum - partsNum;
 
+          // Row colour coding
           const rowClasses = [];
 
           if (r.date) {
@@ -286,7 +307,7 @@
               const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
               if (diffDays <= 7) {
-                rowClasses.push("row-recent");
+                rowClasses.push("row-recent"); // blue
               } else if (diffDays >= 365) {
                 rowClasses.push("row-old");
               }
@@ -324,6 +345,7 @@
           recordsBody.appendChild(tr);
         });
 
+      // Update dashboard after table changes
       renderDashboard();
     }
 
@@ -336,12 +358,21 @@
         contact: contactInput.value.trim(),
         mixerModel: mixerModelInput.value.trim(),
         reg: regInput.value.trim(),
-        partsPrice: partsPriceInput.value ? parseFloat(partsPriceInput.value).toFixed(2) : "",
-        price: priceInput.value ? parseFloat(priceInput.value).toFixed(2) : "",
+        partsPrice: partsPriceInput.value
+          ? parseFloat(partsPriceInput.value).toFixed(2)
+          : "",
+        price: priceInput.value
+          ? parseFloat(priceInput.value).toFixed(2)
+          : "",
         date: dateInput.value,
         status: statusInput.value || "Pending",
         notes: notesInput.value.trim(),
       };
+
+      if (!newRecord.clientName) {
+        alert("Client name is required.");
+        return;
+      }
 
       if (editIndex !== null) {
         records[editIndex] = newRecord;
@@ -387,10 +418,12 @@
       }
     });
 
+    // -------- SEARCH --------
     searchInput.addEventListener("input", () => {
       renderTable();
     });
 
+    // -------- CLEAR ALL --------
     clearAllBtn.addEventListener("click", () => {
       if (confirm("This will delete ALL records on this device. Continue?")) {
         records = [];
@@ -399,6 +432,7 @@
       }
     });
 
+    // -------- SORT CONTROLS --------
     sortBySelect.addEventListener("change", () => {
       sortBy = sortBySelect.value;
       renderTable();
@@ -406,10 +440,15 @@
 
     sortDirBtn.addEventListener("click", () => {
       sortDir = sortDir === "asc" ? "desc" : "asc";
-      sortDirBtn.textContent = sortDir === "asc" ? "↑ Oldest / Lowest" : "↓ Newest / Highest";
+      if (sortDir === "asc") {
+        sortDirBtn.textContent = "↑ Oldest / Lowest";
+      } else {
+        sortDirBtn.textContent = "↓ Newest / Highest";
+      }
       renderTable();
     });
 
+    // -------- THEME (dark / light) --------
     function applyTheme(theme) {
       if (theme === "dark") {
         document.body.classList.add("dark-mode");
@@ -429,9 +468,90 @@
       applyTheme(newTheme);
     });
 
+    // -------- DOWNLOAD CSV --------
+    downloadBtn.addEventListener("click", () => {
+      if (!records.length) {
+        alert("No records to download.");
+        return;
+      }
+
+      const csvRows = [];
+      const header = [
+        "Client",
+        "Contact",
+        "Nixer Model",
+        "Reg",
+        "Status",
+        "Date",
+        "Parts Price (€)",
+        "Total Price (€)",
+        "Profit (€)",
+        "Notes"
+      ];
+      csvRows.push(header.join(","));
+
+      records.forEach((r) => {
+        const totalNum = parseFloat(r.price) || 0;
+        const partsNum = parseFloat(r.partsPrice) || 0;
+        const profit = totalNum - partsNum;
+
+        const row = [
+          r.clientName || "",
+          r.contact || "",
+          r.mixerModel || "",
+          r.reg || "",
+          r.status || "",
+          r.date || "",
+          r.partsPrice || "",
+          r.price || "",
+          profit.toFixed(2),
+          (r.notes || "").replace(/,/g, ";")
+        ];
+
+        csvRows.push(row.join(","));
+      });
+
+      const csvContent = csvRows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "nixer-records.csv";
+      a.click();
+
+      URL.revokeObjectURL(url);
+    });
+
+    // -------- INSTALL BUTTON (PWA) --------
+    window.addEventListener("beforeinstallprompt", (e) => {
+      // Prevent the mini-infobar or default prompt
+      e.preventDefault();
+      deferredPrompt = e;
+
+      // Show our custom Install button
+      installBtn.style.display = "inline-flex";
+    });
+
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) {
+        alert("Install option is not available yet. Try visiting this page from a browser first.");
+        return;
+      }
+
+      deferredPrompt.prompt();
+      const outcome = await deferredPrompt.userChoice;
+
+      // You could log outcome.outcome === 'accepted' / 'dismissed' if you want
+      installBtn.style.display = "none";
+      deferredPrompt = null;
+    });
+
+    // -------- INIT --------
     loadRecords();
     renderTable();
 
+    // -------- SERVICE WORKER REGISTER --------
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
