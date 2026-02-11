@@ -4,7 +4,11 @@
   <meta charset="UTF-8" />
   <title>Nixer Management</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/png" href="carlogo.png">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1976d2" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -17,8 +21,8 @@
         <div class="dash-value" id="totalJobs">0</div>
       </div>
       <div class="dashboard-card">
-        <div class="dash-label">Total revenue (€)</div>
-        <div class="dash-value" id="totalRevenue">0.00</div>
+        <div class="dash-label">Total profit (€)</div>
+        <div class="dash-value" id="totalProfit">0.00</div>
       </div>
       <div class="dashboard-card">
         <div class="dash-label">Jobs this month</div>
@@ -41,7 +45,7 @@
         <input type="text" id="contact" />
       </label>
       <label>
-        Nizer Model
+        Nixer Model
         <input type="text" id="mixerModel" />
       </label>
       <label>
@@ -49,7 +53,11 @@
         <input type="text" id="reg" />
       </label>
       <label>
-        Price (€)
+        Parts Price (€)
+        <input type="number" step="0.01" id="partsPrice" />
+      </label>
+      <label>
+        Total Price (€)
         <input type="number" step="0.01" id="price" />
       </label>
       <label>
@@ -76,14 +84,14 @@
 
     <!-- CONTROLS -->
     <div class="actions">
-      <input type="text" id="searchInput" placeholder="Search by client, reg, mixer, status..." />
+      <input type="text" id="searchInput" placeholder="Search by client, reg, nixer, status..." />
 
       <div class="sort-controls">
         <span class="sort-label">Sort by:</span>
         <select id="sortBy">
           <option value="date">Date</option>
           <option value="client">Client name</option>
-          <option value="price">Price</option>
+          <option value="price">Total price</option>
         </select>
         <button type="button" id="sortDirBtn" class="btn btn-small btn-outline" title="Toggle sort direction">
           ↓ Newest / Highest
@@ -115,7 +123,9 @@
             <th>Reg</th>
             <th>Status</th>
             <th>Date</th>
-            <th>Price (€)</th>
+            <th>Parts (€)</th>
+            <th>Total (€)</th>
+            <th>Profit (€)</th>
             <th>Notes</th>
             <th>Actions</th>
           </tr>
@@ -136,6 +146,7 @@
     const contactInput = document.getElementById("contact");
     const mixerModelInput = document.getElementById("mixerModel");
     const regInput = document.getElementById("reg");
+    const partsPriceInput = document.getElementById("partsPrice");
     const priceInput = document.getElementById("price");
     const dateInput = document.getElementById("date");
     const statusInput = document.getElementById("status");
@@ -151,16 +162,15 @@
 
     // Dashboard elements
     const totalJobsEl = document.getElementById("totalJobs");
-    const totalRevenueEl = document.getElementById("totalRevenue");
+    const totalProfitEl = document.getElementById("totalProfit");
     const jobsThisMonthEl = document.getElementById("jobsThisMonth");
     const pendingJobsEl = document.getElementById("pendingJobs");
 
     let records = [];
-    let editIndex = null; // if not null, we're editing that record
-    let sortBy = "date";  // "date" | "client" | "price"
-    let sortDir = "desc"; // "asc" | "desc"
+    let editIndex = null;
+    let sortBy = "date";
+    let sortDir = "desc";
 
-    // -------- STORAGE --------
     function loadRecords() {
       const saved = localStorage.getItem(STORAGE_KEY);
       records = saved ? JSON.parse(saved) : [];
@@ -194,7 +204,6 @@
         return x - y;
       }
 
-      // default: date
       const x = a.date ? new Date(a.date).getTime() : 0;
       const y = b.date ? new Date(b.date).getTime() : 0;
       return x - y;
@@ -207,15 +216,15 @@
       const currentYear = now.getFullYear();
 
       let totalJobs = records.length;
-      let totalRevenue = 0;
+      let totalProfit = 0;
       let jobsThisMonth = 0;
       let pendingJobs = 0;
 
       records.forEach((r) => {
-        const priceNum = parseFloat(r.price);
-        if (!isNaN(priceNum)) {
-          totalRevenue += priceNum;
-        }
+        const totalNum = parseFloat(r.price) || 0;
+        const partsNum = parseFloat(r.partsPrice) || 0;
+        const profit = totalNum - partsNum;
+        totalProfit += profit;
 
         if (r.date) {
           const d = new Date(r.date);
@@ -231,7 +240,7 @@
       });
 
       totalJobsEl.textContent = totalJobs;
-      totalRevenueEl.textContent = totalRevenue.toFixed(2);
+      totalProfitEl.textContent = totalProfit.toFixed(2);
       jobsThisMonthEl.textContent = jobsThisMonth;
       pendingJobsEl.textContent = pendingJobs;
     }
@@ -244,14 +253,12 @@
       const now = new Date();
       let data = records.map((record, index) => ({ ...record, index }));
 
-      // Sort data
       data.sort((a, b) => {
         let result = compareValues(a, b, sortBy);
         if (sortDir === "desc") result = -result;
         return result;
       });
 
-      // Filter and render
       data
         .filter((r) => {
           if (!filter) return true;
@@ -266,10 +273,12 @@
         .forEach((r) => {
           const tr = document.createElement("tr");
 
-          // ----- Row colour coding -----
+          const totalNum = parseFloat(r.price) || 0;
+          const partsNum = parseFloat(r.partsPrice) || 0;
+          const profitNum = totalNum - partsNum;
+
           const rowClasses = [];
 
-          // recent (≤ 7 days) / old (≥ 365 days)
           if (r.date) {
             const d = new Date(r.date);
             if (!isNaN(d.getTime())) {
@@ -277,20 +286,17 @@
               const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
               if (diffDays <= 7) {
-                rowClasses.push("row-recent"); // blue
+                rowClasses.push("row-recent");
               } else if (diffDays >= 365) {
                 rowClasses.push("row-old");
               }
             }
           }
 
-          // high value
-          const priceNum = parseFloat(r.price);
-          if (!isNaN(priceNum) && priceNum >= 500) {
+          if (totalNum >= 500) {
             rowClasses.push("row-high-value");
           }
 
-          // completed / paid = green
           const status = (r.status || "Pending");
           if (status === "Completed" || status === "Paid") {
             rowClasses.push("row-completed");
@@ -305,7 +311,9 @@
             <td>${r.reg || ""}</td>
             <td>${r.status || ""}</td>
             <td>${r.date || ""}</td>
+            <td>${r.partsPrice || ""}</td>
             <td>${r.price || ""}</td>
+            <td>${isNaN(profitNum) ? "" : profitNum.toFixed(2)}</td>
             <td>${r.notes || ""}</td>
             <td class="actions-cell">
               <button class="btn btn-small btn-outline" data-action="edit" data-index="${r.index}">Edit</button>
@@ -316,7 +324,6 @@
           recordsBody.appendChild(tr);
         });
 
-      // Update dashboard after table changes
       renderDashboard();
     }
 
@@ -329,16 +336,12 @@
         contact: contactInput.value.trim(),
         mixerModel: mixerModelInput.value.trim(),
         reg: regInput.value.trim(),
+        partsPrice: partsPriceInput.value ? parseFloat(partsPriceInput.value).toFixed(2) : "",
         price: priceInput.value ? parseFloat(priceInput.value).toFixed(2) : "",
         date: dateInput.value,
         status: statusInput.value || "Pending",
         notes: notesInput.value.trim(),
       };
-
-      if (!newRecord.clientName) {
-        alert("Client name is required.");
-        return;
-      }
 
       if (editIndex !== null) {
         records[editIndex] = newRecord;
@@ -371,6 +374,7 @@
         contactInput.value = r.contact || "";
         mixerModelInput.value = r.mixerModel || "";
         regInput.value = r.reg || "";
+        partsPriceInput.value = r.partsPrice || "";
         priceInput.value = r.price || "";
         dateInput.value = r.date || "";
         statusInput.value = r.status || "Pending";
@@ -383,12 +387,10 @@
       }
     });
 
-    // -------- SEARCH --------
     searchInput.addEventListener("input", () => {
       renderTable();
     });
 
-    // -------- CLEAR ALL --------
     clearAllBtn.addEventListener("click", () => {
       if (confirm("This will delete ALL records on this device. Continue?")) {
         records = [];
@@ -397,7 +399,6 @@
       }
     });
 
-    // -------- SORT CONTROLS --------
     sortBySelect.addEventListener("change", () => {
       sortBy = sortBySelect.value;
       renderTable();
@@ -405,15 +406,10 @@
 
     sortDirBtn.addEventListener("click", () => {
       sortDir = sortDir === "asc" ? "desc" : "asc";
-      if (sortDir === "asc") {
-        sortDirBtn.textContent = "↑ Oldest / Lowest";
-      } else {
-        sortDirBtn.textContent = "↓ Newest / Highest";
-      }
+      sortDirBtn.textContent = sortDir === "asc" ? "↑ Oldest / Lowest" : "↓ Newest / Highest";
       renderTable();
     });
 
-    // -------- THEME (dark / light) --------
     function applyTheme(theme) {
       if (theme === "dark") {
         document.body.classList.add("dark-mode");
@@ -433,9 +429,18 @@
       applyTheme(newTheme);
     });
 
-    // -------- INIT --------
     loadRecords();
     renderTable();
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("./sw.js")
+          .catch((err) => {
+            console.error("Service worker registration failed:", err);
+          });
+      });
+    }
   </script>
 </body>
 </html>
