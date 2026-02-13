@@ -1,19 +1,4 @@
-const CACHE_NAME = "nixer-cache-v2"; // <-- bump this on each release
-
-const ASSETS_TO_CACHE = [
-  "./",
-  "./index.html",
-  "./style.css",
-  "./manifest.json",
-  "./icons/icons-192.png",
-  "./icons/icons-512.png"
-];
-
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
-  );<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -29,35 +14,7 @@ self.addEventListener("install", (event) => {
 <body>
   <h1>Nixer Management</h1>
 
-  <!-- ✅ AUTH (Login / Sign up) -->
-  <div class="container" id="authContainer" style="max-width:560px; display:none;">
-    <h2 style="margin-top:0;">Login / Sign up</h2>
-
-    <label style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-      Email
-      <input type="email" id="authEmail" placeholder="you@email.com" />
-    </label>
-
-    <label style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">
-      Password
-      <input type="password" id="authPassword" placeholder="••••••••" />
-    </label>
-
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn btn-primary" id="loginBtn" type="button">Login</button>
-      <button class="btn btn-outline" id="signupBtn" type="button">Sign up</button>
-    </div>
-
-    <p id="authMsg" style="margin-top:12px;"></p>
-  </div>
-
-  <!-- ✅ MAIN APP -->
-  <div class="container" id="appContainer" style="display:none;">
-    <!-- Top bar (logout button) -->
-    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-      <button class="btn btn-danger" id="logoutBtn" type="button">Log out</button>
-    </div>
-
+  <div class="container">
     <!-- DASHBOARD SUMMARY -->
     <div class="dashboard">
       <div class="dashboard-card">
@@ -224,91 +181,11 @@ self.addEventListener("install", (event) => {
     </div>
   </div>
 
-  <!-- ✅ Supabase JS (required for login/signup) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script>
-    // =========================
-    // ✅ SUPABASE CONFIG (EDIT ME)
-    // =========================
-    const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
-    const SUPABASE_ANON_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE"; // sb_publishable_...
-
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     const STORAGE_KEY = "mixer_records_v1";
     const THEME_KEY = "mixer_theme_v1";
+
     const $ = (id) => document.getElementById(id);
-
-    // Auth UI
-    const authContainer = $("authContainer");
-    const appContainer = $("appContainer");
-    const authEmail = $("authEmail");
-    const authPassword = $("authPassword");
-    const loginBtn = $("loginBtn");
-    const signupBtn = $("signupBtn");
-    const logoutBtn = $("logoutBtn");
-    const authMsg = $("authMsg");
-
-    function setAuthMessage(msg, isError = false) {
-      if (!authMsg) return;
-      authMsg.textContent = msg;
-      authMsg.style.color = isError ? "crimson" : "green";
-    }
-
-    function showApp(isLoggedIn) {
-      if (authContainer) authContainer.style.display = isLoggedIn ? "none" : "block";
-      if (appContainer) appContainer.style.display = isLoggedIn ? "block" : "none";
-    }
-
-    async function refreshSessionUI() {
-      const { data } = await supabase.auth.getSession();
-      const session = data.session;
-      showApp(!!session);
-      return session;
-    }
-
-    signupBtn?.addEventListener("click", async () => {
-      setAuthMessage("");
-      const email = authEmail.value.trim();
-      const password = authPassword.value;
-
-      if (!email || !password) return setAuthMessage("Enter email + password.", true);
-
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return setAuthMessage(error.message, true);
-
-      setAuthMessage("Signed up! If email confirmation is ON, check your inbox.");
-      await refreshSessionUI();
-    });
-
-    loginBtn?.addEventListener("click", async () => {
-      setAuthMessage("");
-      const email = authEmail.value.trim();
-      const password = authPassword.value;
-
-      if (!email || !password) return setAuthMessage("Enter email + password.", true);
-
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return setAuthMessage(error.message, true);
-
-      setAuthMessage("Logged in!");
-      await refreshSessionUI();
-    });
-
-    logoutBtn?.addEventListener("click", async () => {
-      await supabase.auth.signOut();
-      setAuthMessage("Logged out.");
-      await refreshSessionUI();
-    });
-
-    supabase.auth.onAuthStateChange((_event, _session) => {
-      refreshSessionUI();
-    });
-
-    // =========================
-    // YOUR APP CODE (UNCHANGED)
-    // =========================
 
     // Form inputs
     const form = $("mixerForm");
@@ -362,7 +239,7 @@ self.addEventListener("install", (event) => {
       if (updateBanner) updateBanner.style.display = "none";
     }
 
-    // Storage (still localStorage for now)
+    // Storage
     function loadRecords() {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -670,6 +547,7 @@ self.addEventListener("install", (event) => {
 
     // ✅ Hard refresh (best for iPhone caching)
     hardRefreshBtn.addEventListener("click", async () => {
+      // best effort: tell SW to check for updates
       try {
         if ("serviceWorker" in navigator) {
           const reg = await navigator.serviceWorker.getRegistration();
@@ -677,6 +555,7 @@ self.addEventListener("install", (event) => {
         }
       } catch {}
 
+      // best effort: clear caches
       try {
         if ("caches" in window) {
           const keys = await caches.keys();
@@ -684,17 +563,15 @@ self.addEventListener("install", (event) => {
         }
       } catch {}
 
+      // cache-bust URL
       const url = new URL(window.location.href);
       url.searchParams.set("t", String(Date.now()));
       window.location.replace(url.toString());
     });
 
-    // Init (local storage)
+    // Init
     loadRecords();
     renderTable();
-
-    // Start auth UI check (show login or app)
-    refreshSessionUI();
 
     // Service Worker + Update Banner
     if ("serviceWorker" in navigator) {
@@ -738,29 +615,3 @@ self.addEventListener("install", (event) => {
   </script>
 </body>
 </html>
-
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
-      await self.clients.claim();
-    })()
-  );
-});
-
-// ✅ Needed for the "Refresh" button in the update banner
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
-
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
-});
-
