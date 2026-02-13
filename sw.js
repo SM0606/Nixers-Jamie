@@ -1,4 +1,5 @@
 const CACHE_NAME = "nixer-cache-v2"; // <-- bump this on each release
+
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -23,6 +24,13 @@ self.addEventListener("activate", (event) => {
       await self.clients.claim();
     })()
   );
+});
+
+// ✅ Needed for the "Refresh" button in the update banner
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
