@@ -14,7 +14,8 @@
 <body>
   <h1>Nixer Management</h1>
   <div class="container">
-    <!-- DASHBOARD SUMMARY -->
+
+    <!-- DASHBOARD -->
     <div class="dashboard">
       <div class="dashboard-card">
         <div class="dash-label">Total jobs</div>
@@ -36,36 +37,35 @@
 
     <!-- FORM -->
     <form id="mixerForm">
-      <label>
-        Client Name
+      <label>Client Name
         <input type="text" id="clientName" required />
       </label>
-      <label>
-        Contact (phone/email)
+
+      <label>Contact
         <input type="text" id="contact" />
       </label>
-      <label>
-        Nixer Model
+
+      <label>Nixer Model
         <input type="text" id="mixerModel" />
       </label>
-      <label>
-        Reg / Plate
+
+      <label>Reg / Plate
         <input type="text" id="reg" />
       </label>
-      <label>
-        Parts Price (€)
+
+      <label>Parts Price (€)
         <input type="number" step="0.01" id="partsPrice" />
       </label>
-      <label>
-        Total Price (€)
+
+      <label>Total Price (€)
         <input type="number" step="0.01" id="price" />
       </label>
-      <label>
-        Date
+
+      <label>Date
         <input type="date" id="date" />
       </label>
-      <label>
-        Status / Category
+
+      <label>Status
         <select id="status">
           <option value="Pending">Pending</option>
           <option value="In Progress">In Progress</option>
@@ -90,45 +90,18 @@
 
     <!-- CONTROLS -->
     <div class="actions">
-      <input
-        type="text"
-        id="searchInput"
+      <input type="text" id="searchInput"
         placeholder="Search by client, reg, nixer, status..." />
 
-      <div class="sort-controls">
-        <span class="sort-label">Sort by:</span>
-        <select id="sortBy">
-          <option value="date">Date</option>
-          <option value="client">Client name</option>
-          <option value="price">Total price</option>
-        </select>
-        <button
-          type="button"
-          id="sortDirBtn"
-          class="btn btn-small btn-outline"
-          title="Toggle sort direction">
-          ↓ Newest / Highest
-        </button>
-      </div>
-
       <div class="right-actions">
-        <!-- Install App button (hidden until installable) -->
         <button id="installBtn" class="btn btn-primary" type="button" style="display:none;">
           Install App
         </button>
 
-        <button id="themeToggle" type="button" class="btn btn-outline">Dark mode</button>
-        <button id="downloadBtn" class="btn btn-outline" type="button">Download CSV</button>
-        <button id="clearAllBtn" class="btn btn-danger" type="button">Clear ALL records</button>
+        <button id="themeToggle" class="btn btn-outline">Dark mode</button>
+        <button id="downloadBtn" class="btn btn-outline">Download CSV</button>
+        <button id="clearAllBtn" class="btn btn-danger">Clear ALL records</button>
       </div>
-    </div>
-
-    <!-- LEGEND -->
-    <div class="legend">
-      <span class="legend-item recent">Recent (≤ 7 days)</span>
-      <span class="legend-item high">High value (€500+)</span>
-      <span class="legend-item old">Very old (≥ 1 year)</span>
-      <span class="legend-item done">Completed / Paid</span>
     </div>
 
     <!-- TABLE -->
@@ -145,16 +118,15 @@
             <th>Parts (€)</th>
             <th>Total (€)</th>
             <th>Profit (€)</th>
-            <th>Notes</th>
             <th>Work Needed</th>
+            <th>Notes</th>
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="recordsBody">
-          <!-- rows injected by JS -->
-        </tbody>
+        <tbody id="recordsBody"></tbody>
       </table>
     </div>
+
   </div>
 
   <script>
@@ -162,40 +134,14 @@
     const THEME_KEY = "mixer_theme_v1";
 
     const form = document.getElementById("mixerForm");
-    const clientNameInput = document.getElementById("clientName");
-    const contactInput = document.getElementById("contact");
-    const mixerModelInput = document.getElementById("mixerModel");
-    const regInput = document.getElementById("reg");
-    const partsPriceInput = document.getElementById("partsPrice");
-    const priceInput = document.getElementById("price");
-    const dateInput = document.getElementById("date");
-    const statusInput = document.getElementById("status");
-    const notesInput = document.getElementById("notes");
     const workNeededInput = document.getElementById("workNeeded");
-
+    const notesInput = document.getElementById("notes");
     const recordsBody = document.getElementById("recordsBody");
-    const searchInput = document.getElementById("searchInput");
-    const clearAllBtn = document.getElementById("clearAllBtn");
-    const addBtn = document.getElementById("addBtn");
-    const sortBySelect = document.getElementById("sortBy");
-    const sortDirBtn = document.getElementById("sortDirBtn");
-    const themeToggleBtn = document.getElementById("themeToggle");
-    const downloadBtn = document.getElementById("downloadBtn");
     const installBtn = document.getElementById("installBtn");
 
-    // Dashboard elements
-    const totalJobsEl = document.getElementById("totalJobs");
-    const totalProfitEl = document.getElementById("totalProfit");
-    const jobsThisMonthEl = document.getElementById("jobsThisMonth");
-    const pendingJobsEl = document.getElementById("pendingJobs");
-
     let records = [];
-    let editIndex = null; // if not null, we're editing that record
-    let sortBy = "date";  // "date" | "client" | "price"
-    let sortDir = "desc"; // "asc" | "desc"
-    let deferredPrompt = null; // for PWA install
+    let deferredPrompt = null;
 
-    // -------- STORAGE --------
     function loadRecords() {
       const saved = localStorage.getItem(STORAGE_KEY);
       records = saved ? JSON.parse(saved) : [];
@@ -205,363 +151,90 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     }
 
-    function clearForm() {
-      form.reset();
-      editIndex = null;
-      statusInput.value = "Pending";
-      addBtn.textContent = "Add / Save";
-      addBtn.classList.remove("btn-editing");
-    }
-
-    // -------- SORTING --------
-    function compareValues(a, b, field) {
-      if (field === "client") {
-        const x = (a.clientName || "").toLowerCase();
-        const y = (b.clientName || "").toLowerCase();
-        if (x < y) return -1;
-        if (x > y) return 1;
-        return 0;
-      }
-
-      if (field === "price") {
-        const x = parseFloat(a.price) || 0;
-        const y = parseFloat(b.price) || 0;
-        return x - y;
-      }
-
-      // default: date
-      const x = a.date ? new Date(a.date).getTime() : 0;
-      const y = b.date ? new Date(b.date).getTime() : 0;
-      return x - y;
-    }
-
-    // -------- DASHBOARD --------
-    function renderDashboard() {
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-
-      let totalJobs = records.length;
-      let totalProfit = 0;
-      let jobsThisMonth = 0;
-      let pendingJobs = 0;
-
-      records.forEach((r) => {
-        const totalNum = parseFloat(r.price) || 0;
-        const partsNum = parseFloat(r.partsPrice) || 0;
-        const profit = totalNum - partsNum;
-        totalProfit += profit;
-
-        if (r.date) {
-          const d = new Date(r.date);
-          if (!isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-            jobsThisMonth++;
-          }
-        }
-
-        const status = (r.status || "Pending");
-        if (status === "Pending" || status === "In Progress") {
-          pendingJobs++;
-        }
-      });
-
-      totalJobsEl.textContent = totalJobs;
-      totalProfitEl.textContent = totalProfit.toFixed(2);
-      jobsThisMonthEl.textContent = jobsThisMonth;
-      pendingJobsEl.textContent = pendingJobs;
-    }
-
-    // -------- TABLE RENDER --------
     function renderTable() {
-      const filter = searchInput.value.trim().toLowerCase();
       recordsBody.innerHTML = "";
 
-      const now = new Date();
-      let data = records.map((record, index) => ({ ...record, index }));
+      records.forEach((r, index) => {
+        const total = parseFloat(r.price) || 0;
+        const parts = parseFloat(r.partsPrice) || 0;
+        const profit = total - parts;
 
-      // Sort data
-      data.sort((a, b) => {
-        let result = compareValues(a, b, sortBy);
-        if (sortDir === "desc") result = -result;
-        return result;
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>${r.clientName || ""}</td>
+          <td>${r.contact || ""}</td>
+          <td>${r.mixerModel || ""}</td>
+          <td>${r.reg || ""}</td>
+          <td>${r.status || ""}</td>
+          <td>${r.date || ""}</td>
+          <td>${r.partsPrice || ""}</td>
+          <td>${r.price || ""}</td>
+          <td>${profit.toFixed(2)}</td>
+          <td>${r.workNeeded || ""}</td>
+          <td>${r.notes || ""}</td>
+          <td>
+            <button onclick="deleteRecord(${index})">Delete</button>
+          </td>
+        `;
+
+        recordsBody.appendChild(tr);
       });
-
-      // Filter + render
-      data
-        .filter((r) => {
-          if (!filter) return true;
-          return (
-            (r.clientName || "").toLowerCase().includes(filter) ||
-            (r.contact || "").toLowerCase().includes(filter) ||
-            (r.mixerModel || "").toLowerCase().includes(filter) ||
-            (r.reg || "").toLowerCase().includes(filter) ||
-            (r.status || "").toLowerCase().includes(filter)
-          );
-        })
-        .forEach((r) => {
-          const tr = document.createElement("tr");
-
-          const totalNum = parseFloat(r.price) || 0;
-          const partsNum = parseFloat(r.partsPrice) || 0;
-          const profitNum = totalNum - partsNum;
-
-          // Row colour coding
-          const rowClasses = [];
-
-          if (r.date) {
-            const d = new Date(r.date);
-            if (!isNaN(d.getTime())) {
-              const diffMs = now - d;
-              const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-              if (diffDays <= 7) {
-                rowClasses.push("row-recent"); // blue
-              } else if (diffDays >= 365) {
-                rowClasses.push("row-old");
-              }
-            }
-          }
-
-          if (totalNum >= 500) {
-            rowClasses.push("row-high-value");
-          }
-
-          const status = (r.status || "Pending");
-          if (status === "Completed" || status === "Paid") {
-            rowClasses.push("row-completed");
-          }
-
-          tr.className = rowClasses.join(" ");
-
-          tr.innerHTML = `
-            <td>${r.clientName || ""}</td>
-            <td>${r.contact || ""}</td>
-            <td>${r.mixerModel || ""}</td>
-            <td>${r.reg || ""}</td>
-            <td>${r.status || ""}</td>
-            <td>${r.date || ""}</td>
-            <td>${r.partsPrice || ""}</td>
-            <td>${r.price || ""}</td>
-            <td>${isNaN(profitNum) ? "" : profitNum.toFixed(2)}</td>
-            <td>${r.notes || ""}</td>
-            <td>${r.workNeeded || ""}</td>
-            <td class="actions-cell">
-              <button class="btn btn-small btn-outline" data-action="edit" data-index="${r.index}">Edit</button>
-              <button class="btn btn-small btn-danger-outline" data-action="delete" data-index="${r.index}">Delete</button>
-            </td>
-          `;
-
-          recordsBody.appendChild(tr);
-        });
-
-      // Update dashboard after table changes
-      renderDashboard();
     }
 
-    // -------- FORM SUBMIT --------
+    function deleteRecord(index) {
+      records.splice(index, 1);
+      saveRecords();
+      renderTable();
+    }
+
     form.addEventListener("submit", (e) => {
       e.preventDefault();
 
       const newRecord = {
-        clientName: clientNameInput.value.trim(),
-        contact: contactInput.value.trim(),
-        mixerModel: mixerModelInput.value.trim(),
-        reg: regInput.value.trim(),
-        partsPrice: partsPriceInput.value
-          ? parseFloat(partsPriceInput.value).toFixed(2)
-          : "",
-        price: priceInput.value
-          ? parseFloat(priceInput.value).toFixed(2)
-          : "",
-        date: dateInput.value,
-        status: statusInput.value || "Pending",
-        workNeeded: workNeededInput.value.trim(),
-        notes: notesInput.value.trim(),
+        clientName: document.getElementById("clientName").value,
+        contact: document.getElementById("contact").value,
+        mixerModel: document.getElementById("mixerModel").value,
+        reg: document.getElementById("reg").value,
+        partsPrice: document.getElementById("partsPrice").value,
+        price: document.getElementById("price").value,
+        date: document.getElementById("date").value,
+        status: document.getElementById("status").value,
+        workNeeded: workNeededInput.value,
+        notes: notesInput.value
       };
 
-      if (!newRecord.clientName) {
-        alert("Client name is required.");
-        return;
-      }
-
-      if (editIndex !== null) {
-        records[editIndex] = newRecord;
-      } else {
-        records.push(newRecord);
-      }
-
+      records.push(newRecord);
       saveRecords();
       renderTable();
-      clearForm();
+      form.reset();
     });
 
-    // -------- TABLE BUTTONS (EDIT / DELETE) --------
-    recordsBody.addEventListener("click", (e) => {
-      const btn = e.target;
-      if (btn.tagName !== "BUTTON") return;
-
-      const index = parseInt(btn.dataset.index, 10);
-      const action = btn.dataset.action;
-
-      if (action === "delete") {
-        if (confirm("Delete this record?")) {
-          records.splice(index, 1);
-          saveRecords();
-          renderTable();
-        }
-      } else if (action === "edit") {
-        const r = records[index];
-        clientNameInput.value = r.clientName || "";
-        contactInput.value = r.contact || "";
-        mixerModelInput.value = r.mixerModel || "";
-        regInput.value = r.reg || "";
-        partsPriceInput.value = r.partsPrice || "";
-        priceInput.value = r.price || "";
-        dateInput.value = r.date || "";
-        statusInput.value = r.status || "Pending";
-        workNeededInput.value = r.workNeeded || "";
-        notesInput.value = r.notes || "";
-
-        editIndex = index;
-        addBtn.textContent = "Save changes";
-        addBtn.classList.add("btn-editing");
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    });
-
-    // -------- SEARCH --------
-    searchInput.addEventListener("input", () => {
-      renderTable();
-    });
-
-    // -------- CLEAR ALL --------
-    clearAllBtn.addEventListener("click", () => {
-      if (confirm("This will delete ALL records on this device. Continue?")) {
-        records = [];
-        saveRecords();
-        renderTable();
-      }
-    });
-
-    // -------- SORT CONTROLS --------
-    sortBySelect.addEventListener("change", () => {
-      sortBy = sortBySelect.value;
-      renderTable();
-    });
-
-    sortDirBtn.addEventListener("click", () => {
-      sortDir = sortDir === "asc" ? "desc" : "asc";
-      sortDirBtn.textContent = sortDir === "asc" ? "↑ Oldest / Lowest" : "↓ Newest / Highest";
-      renderTable();
-    });
-
-    // -------- THEME (dark / light) --------
-    function applyTheme(theme) {
-      if (theme === "dark") {
-        document.body.classList.add("dark-mode");
-        themeToggleBtn.textContent = "Light mode";
-      } else {
-        document.body.classList.remove("dark-mode");
-        themeToggleBtn.textContent = "Dark mode";
-      }
-    }
-
-    const savedTheme = localStorage.getItem(THEME_KEY) || "light";
-    applyTheme(savedTheme);
-
-    themeToggleBtn.addEventListener("click", () => {
-      const newTheme = document.body.classList.contains("dark-mode") ? "light" : "dark";
-      localStorage.setItem(THEME_KEY, newTheme);
-      applyTheme(newTheme);
-    });
-
-    // -------- DOWNLOAD CSV --------
-    downloadBtn.addEventListener("click", () => {
-      if (!records.length) {
-        alert("No records to download.");
-        return;
-      }
-
-      const csvRows = [];
-      const header = [
-        "Client",
-        "Contact",
-        "Nixer Model",
-        "Reg",
-        "Status",
-        "Date",
-        "Parts Price (€)",
-        "Total Price (€)",
-        "Profit (€)",
-        "Notes",
-        "Work Needed"
-      ];
-      csvRows.push(header.join(","));
-
-      records.forEach((r) => {
-        const totalNum = parseFloat(r.price) || 0;
-        const partsNum = parseFloat(r.partsPrice) || 0;
-        const profit = totalNum - partsNum;
-
-        const row = [
-          r.clientName || "",
-          r.contact || "",
-          r.mixerModel || "",
-          r.reg || "",
-          r.status || "",
-          r.date || "",
-          r.partsPrice || "",
-          r.price || "",
-          profit.toFixed(2),
-          (r.notes || "").replace(/,/g, ";"),
-          (r.workNeeded || "").replace(/,/g, ";")
-        ];
-
-        csvRows.push(row.join(","));
-      });
-
-      const csvContent = csvRows.join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "nixer-records.csv";
-      a.click();
-
-      URL.revokeObjectURL(url);
-    });
-
-    // -------- INSTALL BUTTON (PWA) --------
+    // INSTALL BUTTON
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      installBtn.style.display = "inline-flex";
+      installBtn.style.display = "inline-block";
     });
 
     installBtn.addEventListener("click", async () => {
-      if (!deferredPrompt) {
-        alert("Install option is not available yet. Try visiting this page from a browser first.");
-        return;
-      }
+      if (!deferredPrompt) return;
       deferredPrompt.prompt();
       await deferredPrompt.userChoice;
       installBtn.style.display = "none";
       deferredPrompt = null;
     });
 
-    // -------- INIT --------
+    // INIT
     loadRecords();
     renderTable();
 
-    // -------- SERVICE WORKER REGISTER --------
+    // SERVICE WORKER REGISTER (VERSIONED)
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
-          .register("./sw.js")
-          .catch((err) => {
-            console.error("Service worker registration failed:", err);
-          });
+          .register("./sw.js?v=v2") // MUST MATCH cache version
+          .catch(console.error);
       });
     }
   </script>
